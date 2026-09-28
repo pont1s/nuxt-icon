@@ -7,7 +7,7 @@ import type { Nuxt } from '@nuxt/schema'
 import { schema } from './schema'
 import type { ModuleOptions, NuxtIconRuntimeOptions } from './types'
 import { unocssIntegration } from './integrations/unocss'
-import { registerServerBundle } from './bundle-server'
+import { registerServerBundle, writeFetchedCollections } from './bundle-server'
 import { registerClientBundle } from './bundle-client'
 import { NuxtIconModuleContext } from './context'
 import { getResolvePaths } from './collections'
@@ -168,6 +168,9 @@ export default defineNuxtModule<ModuleOptions>({
     })
 
     registerServerBundle(ctx)
+    // Download while the Nitro server is being built (not on loadNuxt, so `nuxi prepare`
+    // and the @nuxt/test-utils Vitest environment make no requests); a failure fails the build
+    nuxt.hook('nitro:build:before', () => writeFetchedCollections(ctx))
     registerClientBundle(ctx)
 
     // Devtools

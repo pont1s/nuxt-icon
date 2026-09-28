@@ -6,6 +6,7 @@ import { collectionNames } from './collection-names'
 import type { ModuleOptions, NuxtIconRuntimeOptions, ResolvedServerBundleOptions } from './types'
 import { getResolvePaths } from './collections'
 import { discoverInstalledCollections, loadCustomCollection, resolveCollection } from './core/collections'
+import { fetchRemoteCollections, getRemoteCollectionRequests } from './core/remote'
 import { IconUsageScanner } from './core/scan'
 import { resolveBundleIcons, type ResolvedBundleIcons } from './core/bundle'
 
@@ -95,9 +96,13 @@ export class NuxtIconModuleContext {
         disabled: true,
         remote: false,
         externalizeIconsJson: false,
+        fetchRemoteAtBuild: false,
         collections: [],
       }
     }
+
+    if (resolved.fetchRemoteAtBuild && resolved.remote && !resolved.collections)
+      throw new Error('[@nuxt/icon] `serverBundle.fetchRemoteAtBuild` requires `serverBundle.collections` to be set explicitly')
 
     if (!resolved.collections)
       resolved.collections = resolved.remote
@@ -115,11 +120,58 @@ export class NuxtIconModuleContext {
         ? 'jsdelivr' // Default remote source
         : resolved.remote || false,
       externalizeIconsJson: !!resolved.externalizeIconsJson,
+      fetchRemoteAtBuild: !!resolved.fetchRemoteAtBuild,
       collections: [
         ...collections,
         ...await this.loadCustomCollection(),
       ],
     }
+  }
+
+  private _remoteCollections: Promise<Map<string, IconifyJSON>> | undefined
+
+  /**
+   * Download the remote collections of the server bundle when `serverBundle.fetchRemoteAtBuild` is enabled.
+   * The result is cached, so collections are downloaded once per process.
+   * Resolves to an empty map when the option is off, in development and in `nuxi prepare`.
+   */
+  async resolveRemoteCollections(): Promise<Map<string, IconifyJSON>> {
+    this._remoteCollections ||= this._resolveRemoteCollections()
+    return this._remoteCollections
+  }
+
+  /**
+   * Drop the downloaded collections once they are written, so they can be garbage collected
+   */
+  releaseRemoteCollections(): void {
+    this._remoteCollections = undefined
+  }
+
+  private async _resolveRemoteCollections(): Promise<Map<string, IconifyJSON>> {
+    const serverBundle = this.options.serverBundle
+    if (typeof serverBundle !== 'object' || !serverBundle?.fetchRemoteAtBuild)
+      return new Map()
+
+    const bundle = await this.resolveServerBundle()
+    if (bundle.disabled) {
+      logger.warn('`serverBundle.fetchRemoteAtBuild` has no effect because the server bundle is disabled (it requires `provider: \'server\'`)')
+      return new Map()
+    }
+
+    const requests = getRemoteCollectionRequests(bundle)
+    if (!requests.length) {
+      logger.warn('`serverBundle.fetchRemoteAtBuild` has no effect because the server bundle has no remote collections (set `serverBundle.remote` or add `{ prefix, fetchEndpoint }` collections)')
+      return new Map()
+    }
+
+    if (this.nuxt.options._prepare)
+      return new Map()
+    if (this.nuxt.options.dev) {
+      logger.info('`serverBundle.fetchRemoteAtBuild` is skipped in development; remote collections are fetched at runtime')
+      return new Map()
+    }
+
+    return fetchRemoteCollections(requests)
   }
 
   async loadCustomCollection(force = false): Promise<IconifyJSON[]> {

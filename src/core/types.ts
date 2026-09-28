@@ -61,6 +61,20 @@ export interface ServerBundleOptions {
    * @default false
    */
   externalizeIconsJson?: boolean
+
+  /**
+   * Download remote collections (`remote` source and `{ prefix, fetchEndpoint }` entries)
+   * while building and bundle them into the server bundle like local collections. The build fails if any download fails.
+   *
+   * Requires `collections` to be listed explicitly; the configuration is always validated.
+   * Remote collections are only downloaded when the Nitro server is built (`nuxi build` / `nuxi generate`);
+   * in development and `nuxi prepare` they are fetched at runtime instead.
+   * Requires the server bundle, i.e. `provider: 'server'`. Downloaded collections are always bundled as
+   * separate server chunks, even with `externalizeIconsJson`.
+   *
+   * @default false
+   */
+  fetchRemoteAtBuild?: boolean
 }
 
 export interface ClientBundleOptions {
@@ -124,4 +138,5 @@ export interface ResolvedServerBundleOptions {
   remote: RemoteCollectionSource | false
   collections: (string | IconifyJSON | RemoteCollection)[]
   externalizeIconsJson: boolean
+  fetchRemoteAtBuild: boolean
 }

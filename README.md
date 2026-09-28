@@ -406,6 +406,35 @@ Under the hood, instead of bundling `() => import('@iconify-json/ph/icons.json')
 
 This would be useful when server bundle size is a concern, like in serverless or worker environments.
 
+##### Download remote collections at build time
+
+Set `serverBundle.fetchRemoteAtBuild` to `true` to download the remote collections while building and bundle them into your server like local collections:
+
+```ts
+export default defineNuxtConfig({
+  modules: [
+    '@nuxt/icon'
+  ],
+  icon: {
+    serverBundle: {
+      remote: name => `https://icons.example.com/${name}.json`,
+      collections: ['ph', 'uil'],
+      fetchRemoteAtBuild: true,
+    }
+  },
+})
+```
+
+- The server makes no requests to the remote source at runtime, and the build output does not depend on it being available.
+- If any collection fails to download (network error, timeout, non-2xx response, or an invalid collection), the build fails with an error listing every failed collection.
+- `collections` must be listed explicitly, so the build does not try to download every Iconify collection. The configuration is always validated.
+- Remote collections are only downloaded when the Nitro server is built (`nuxi build` / `nuxi generate`); in development and `nuxi prepare` they are fetched at runtime instead.
+- Collections given as `{ prefix, fetchEndpoint }` are downloaded as well.
+- The downloaded collections are always bundled as separate server chunks loaded on demand, even with `externalizeIconsJson`, and increase the size of your server bundle.
+- The option requires the server bundle, which is only used with `provider: 'server'`. Note that `nuxi generate` and `ssr: false` default to the `iconify` provider.
+
+This only covers the collections of the server bundle. Icons from other collections may still be fetched from the Iconify API at runtime; set `fallbackToApi` to `false` or `'client-only'` to prevent the server from making any icon requests.
+
 #### Server Bundle Mode: `auto`
 
 This is the default option, where the module will pick between `local` and `remote` based your deployment environment. `local` will be preffered unless you are deploying to a serverless or worker environment, like Vercel Edge or Cloudflare Workers.
